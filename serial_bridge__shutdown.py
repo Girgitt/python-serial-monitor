@@ -120,6 +120,7 @@ def main():
     prefix = os.environ.get("VPORT_PREFIX", "/tmp/ttyNR")
     chmod_vpty = int(os.environ.get("CHMOD_VPTY", "666"))
     echo_pty_tx = env_flag("ECHO_PTY_TX", False)
+    echo_ping_tx = env_flag("ECHO_PING_TX", False)
 
     validate = env_flag("SHUTDOWN_VALIDATE", False)
     secret = os.environ.get("SHUTDOWN_SECRET", "super-secret")
@@ -159,6 +160,7 @@ def main():
     if not vpty:
         print("[WARN] No virtual ports created (VPORTS=0).")
     print(f"[INFO] ECHO_PTY_TX={'ON' if echo_pty_tx else 'OFF'}")
+    print(f"[INFO] ECHO_PING_TX={'ON' if echo_ping_tx else 'OFF'}")
     print(f"[INFO] SHUTDOWN_VALIDATE={'ON' if validate else 'OFF'}")
     if enable_ping:
         print(f"[INFO] PING_INTERVAL_SEC={ping_interval:.3f}")
@@ -194,10 +196,22 @@ def main():
 
             # Send ping if due
             if enable_ping and time.monotonic() >= next_ping:
+                ping_msg = b"ping\n"
                 try:
-                    ser.write(b"ping\n")
+                    ser.write(ping_msg)
                 except Exception as e:
                     print(f"[WARN] serial write (ping) failed: {e}", file=sys.stderr)
+
+                if env_flag("ECHO_PING_TX", False) and ping_msg:
+                    for (mfd, _slave, link) in vpty:
+                        try:
+                            os.write(mfd, ping_msg)
+                        except OSError as e:
+                            if e.errno not in (errno.EIO, errno.EPIPE, errno.ENXIO, errno.EBADF, errno.EAGAIN):
+                                print(f"[WARN] ping write to {link} failed: {e}", file=sys.stderr)
+                        except Exception as e:
+                            print(f"[WARN] ping write to {link} failed: {e}", file=sys.stderr)
+
                 next_ping = time.monotonic() + ping_interval
 
             if not rlist:
