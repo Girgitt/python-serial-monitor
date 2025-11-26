@@ -16,7 +16,6 @@ ENV
   PING_INTERVAL_SEC=0      # >0 to send "ping\\n" every N seconds
   STARTUP_FLUSH=1          # 1 = drop any buffered input at startup
   STARTUP_FLUSH_MS=200     # drain window after flush (milliseconds)
-  WARMUP_MS=200
 """
 
 import os, sys, time, signal, select, errno, fcntl, subprocess, termios
@@ -173,9 +172,6 @@ def main():
     validate = env_flag("SHUTDOWN_VALIDATE", False)
     secret = os.environ.get("SHUTDOWN_SECRET", "super-secret")
 
-    WARMUP_MS = int(os.environ.get("WARMUP_MS", "200"))
-    warmup_deadline = time.monotonic() + (WARMUP_MS / 1000.0)
-
     # Heartbeat / ping settings
     try:
         ping_interval = float(os.environ.get("PING_INTERVAL_SEC", "0"))
@@ -304,8 +300,7 @@ def main():
                             line = raw.decode("utf-8", errors="ignore").strip()
                         except Exception:
                             continue
-                        if time.monotonic() < warmup_deadline:
-                            continue
+
                         if not line:
                             continue
 
